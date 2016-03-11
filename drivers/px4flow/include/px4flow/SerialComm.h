@@ -54,6 +54,8 @@ private:
 
     bool m_connected;
 
+    mavlink_optical_flow_t flow;
+    
     ros::Time ros_time_init;
     ros::Time stamp;
     ros::Duration time_diff;
