@@ -53,6 +53,14 @@ private:
     int m_errorCount;
 
     bool m_connected;
+
+    ros::Time ros_time_init;
+    ros::Time stamp;
+    ros::Duration time_diff;
+    int sensor_ini_usec;
+    bool first_step;
+    bool second_step;
+    bool third_step;
 };
 
 }

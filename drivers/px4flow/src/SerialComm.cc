@@ -24,8 +24,13 @@ SerialComm::SerialComm(const std::string& frameId)
  , m_timeout(false)
  , m_errorCount(0)
  , m_connected(false)
+ , ros_time_init(ros::Time::now())
+ , stamp(ros_time_init)
+ , time_diff(0)
+ , first_step(true)
+ , second_step(false)
+ , third_step(false)
 {
-
 }
 
 SerialComm::~SerialComm()
@@ -162,9 +167,45 @@ SerialComm::readCallback(const boost::system::error_code& error, size_t bytesTra
                 mavlink_optical_flow_t flow;
                 mavlink_msg_optical_flow_decode(&message, &flow);
 
+                // The sensor time has a weird behaviour and we have to store 
+                // the initial sensor time on third loop step.
+                if (first_step)
+                {
+                    if (second_step)
+                    {
+                      if (third_step)
+                      {
+                        first_step = false;
+                        second_step = false;
+                        third_step = false;
+                      }  
+                      third_step = true;
+                      sensor_ini_usec = flow.time_usec;   
+                      ros_time_init = ros::Time::now();                   
+                    }
+                    second_step = true;
+                }
+                
                 px_comm::OpticalFlow optFlowMsg;
 
-                optFlowMsg.header.stamp = ros::Time(flow.time_usec / 1000000, (flow.time_usec % 1000000) * 1000);
+                int sensor_time_usec = flow.time_usec - sensor_ini_usec;
+                stamp = ros_time_init + ros::Duration(sensor_time_usec / 1000000, (sensor_time_usec % 1000000) * 1000);
+
+                ros::Duration ros_time = ros::Time::now()-ros_time_init;
+                ros::Duration sensor_time = stamp-ros_time_init;
+
+                if (ros_time.toSec() < 1.0)
+                    time_diff = sensor_time - ros_time;
+
+                // DEBUG
+                // std::cout << ros_time.toSec() << "  ROS ---" << std::endl;
+                // std::cout << sensor_time.toSec() << "  Sensor ***" << std::endl;
+                // std::cout << time_diff.toSec() << " Diff ...." << std::endl;
+                // std::cout << (stamp - time_diff - ros_time_init).toSec() << " Stamp ...." << std::endl;
+                
+
+                optFlowMsg.header.stamp = stamp - time_diff;
+                // optFlowMsg.header.stamp = ros::Time(flow.time_usec / 1000000, (flow.time_usec % 1000000) * 1000);
                 optFlowMsg.header.frame_id = m_frameId;
                 optFlowMsg.ground_distance = flow.ground_distance;
                 optFlowMsg.flow_x = flow.flow_x;
