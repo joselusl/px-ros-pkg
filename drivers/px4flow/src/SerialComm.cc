@@ -27,9 +27,8 @@ SerialComm::SerialComm(const std::string& frameId)
  , ros_time_init(ros::Time::now())
  , stamp(ros_time_init)
  , time_diff(0)
- , first_step(false)
- , second_step(false)
- , third_step(false)
+ , time_ok(false)
+ , nstep(0)
 {
 }
 
@@ -155,40 +154,6 @@ SerialComm::readCallback(const boost::system::error_code& error, size_t bytesTra
     for (size_t i = 0; i < bytesTransferred; i++) {
         bool msgReceived = mavlink_parse_char(MAVLINK_COMM_1, m_buffer[i], &message, &status);
 
-        // The sensor time has a weird behaviour and we have to store 
-        // the initial sensor time on third loop step.
-        if (first_step)
-        {
-            if (second_step)
-            {
-              if (third_step)
-              {
-                // first_step = false;
-                second_step = false;
-                third_step = false;
-              }  
-              third_step = true;
-              sensor_ini_usec = flow.time_usec;   
-              ros_time_init = ros::Time::now();                   
-            }
-            second_step = true;
-
-          int sensor_time_usec = flow.time_usec - sensor_ini_usec;
-          stamp = ros_time_init + ros::Duration(sensor_time_usec / 1000000, (sensor_time_usec % 1000000) * 1000);
-
-          ros::Duration ros_time = ros::Time::now()-ros_time_init;
-          ros::Duration sensor_time = stamp-ros_time_init;
-
-          if (ros_time.toSec() < 1.0)
-              time_diff = sensor_time - ros_time;
-
-          // DEBUG
-          // std::cout << ros_time.toSec() << "  ROS ---" << std::endl;
-          // std::cout << sensor_time.toSec() << "  Sensor ***" << std::endl;
-          // std::cout << time_diff.toSec() << " Diff ...." << std::endl;
-          // std::cout << (stamp - time_diff - ros_time_init).toSec() << " Stamp ...." << std::endl;
-        }
-
         if (msgReceived)
         {
             m_systemId = message.sysid;
@@ -200,8 +165,40 @@ SerialComm::readCallback(const boost::system::error_code& error, size_t bytesTra
                 // decode message
                 mavlink_msg_optical_flow_decode(&message, &flow);
 
-                if (first_step)
+
+                // The sensor time has a weird behaviour and we have to store 
+                // the initial sensor time on third loop step.
+                if (!time_ok)
                 {
+                    if (nstep >= 3)
+                    {
+                        sensor_ini_usec = flow.time_usec;   
+                        ros_time_init = ros::Time::now();  
+                        time_ok = true;
+                    }
+                    else
+                        nstep = nstep + 1;
+                }
+                else
+                {
+                  int sensor_time_usec = flow.time_usec - sensor_ini_usec;
+                  stamp = ros_time_init + ros::Duration(sensor_time_usec / 1000000, (sensor_time_usec % 1000000) * 1000);
+        
+                  ros::Duration ros_time = ros::Time::now()-ros_time_init;
+                  ros::Duration sensor_time = stamp-ros_time_init;
+        
+                  if (ros_time.toSec() < 1.0)
+                      time_diff = sensor_time - ros_time;
+        
+                  // // DEBUG
+                  // std::cout << "**************" << std::endl;
+                  // std::cout << flow.time_usec << std::endl;
+                  // std::cout << sensor_time_usec << std::endl;
+                  // std::cout << ros_time.toSec() << "  ROS ---" << std::endl;
+                  // std::cout << sensor_time.toSec() << "  Sensor ***" << std::endl;
+                  // std::cout << time_diff.toSec() << " Diff ...." << std::endl;
+                  // std::cout << (stamp - time_diff - ros_time_init).toSec() << " Stamp ...." << std::endl;          
+
                   // Publish message
                   px_comm::OpticalFlow optFlowMsg;                
                   optFlowMsg.header.stamp = stamp - time_diff;
@@ -216,8 +213,6 @@ SerialComm::readCallback(const boost::system::error_code& error, size_t bytesTra
 
                   m_optFlowPub.publish(optFlowMsg);
                 }
-                else 
-                    first_step = true;
 
                 break;
             }
@@ -266,7 +261,7 @@ SerialComm::readCallback(const boost::system::error_code& error, size_t bytesTra
 
                 if (seq + 1 == m_imagePackets)
                 {
-                  if (first_step)
+                  if (time_ok)
                   {
                     sensor_msgs::Image image;
                     image.header.stamp = stamp - time_diff;
