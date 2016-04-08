@@ -237,7 +237,7 @@ SerialComm::readCallback(const boost::system::error_code& error, size_t bytesTra
 
                     // Clean oldest reading
                     if (reading_queue_.size() > filter_window_size_-1)
-                      reading_queue_.pop_back();
+                      reading_queue_.erase(reading_queue_.begin());
                   }
 
                   // Publish message
