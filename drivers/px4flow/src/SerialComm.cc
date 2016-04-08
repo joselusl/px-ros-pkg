@@ -7,6 +7,8 @@
 
 #include "px4flow/SerialComm.h"
 
+#include <queue>
+
 namespace px
 {
 
@@ -41,8 +43,11 @@ SerialComm::~SerialComm()
 }
 
 bool
-SerialComm::open(const std::string& portStr, int baudrate)
+SerialComm::open(const std::string& portStr, int baudrate, bool output_filtered, int filter_window_size)
 {
+    output_filtered_ = output_filtered;
+    filter_window_size_ = filter_window_size;
+
     m_timeout = false;
     m_errorCount = 0;
     m_connected = false;
@@ -190,6 +195,53 @@ SerialComm::readCallback(const boost::system::error_code& error, size_t bytesTra
                   if (ros_time.toSec() < 1.0)
                       time_diff = sensor_time - ros_time;
         
+
+                  // Filter output if requested
+                  std::vector<double> pub_data;
+                  pub_data.push_back(flow.ground_distance);
+                  pub_data.push_back(flow.flow_x);
+                  pub_data.push_back(flow.flow_y);
+                  pub_data.push_back(flow.flow_comp_m_x);
+                  pub_data.push_back(flow.flow_comp_m_y);
+
+                  if (output_filtered_)
+                  {
+                    // Add newest reading
+                    reading_queue_.push_back(pub_data);
+  
+                    // Compute mean
+                    std::vector<double> readsum(5);
+                    for (int ii = 0; ii < reading_queue_.size(); ++ii)
+                    {
+                      readsum.at(0) = readsum.at(0) + reading_queue_.at(ii).at(0);
+                      readsum.at(1) = readsum.at(1) + reading_queue_.at(ii).at(1);
+                      readsum.at(2) = readsum.at(2) + reading_queue_.at(ii).at(2);
+                      readsum.at(3) = readsum.at(3) + reading_queue_.at(ii).at(3);
+                      readsum.at(4) = readsum.at(4) + reading_queue_.at(ii).at(4);
+                    }
+
+                    pub_data.clear();
+                    for (int ii = 0; ii < readsum.size(); ++ii)
+                    {
+                      pub_data.push_back(readsum.at(ii)/reading_queue_.size());
+                    }
+
+                    // Clean oldest reading
+                    if (reading_queue_.size() > filter_window_size_-1)
+                      reading_queue_.pop_back();
+                  }
+
+                  // Publish message
+                  px_comm::OpticalFlow optFlowMsg;                
+                  optFlowMsg.header.stamp = stamp - time_diff;
+                  optFlowMsg.header.frame_id = m_frameId;
+                  optFlowMsg.ground_distance = pub_data.at(0);
+                  optFlowMsg.flow_x = pub_data.at(1);
+                  optFlowMsg.flow_y = pub_data.at(2);
+                  optFlowMsg.velocity_x = pub_data.at(3);
+                  optFlowMsg.velocity_y = pub_data.at(4);
+                  optFlowMsg.quality = flow.quality;
+
                   // // DEBUG
                   // std::cout << "**************" << std::endl;
                   // std::cout << flow.time_usec << std::endl;
@@ -199,17 +251,16 @@ SerialComm::readCallback(const boost::system::error_code& error, size_t bytesTra
                   // std::cout << time_diff.toSec() << " Diff ...." << std::endl;
                   // std::cout << (stamp - time_diff - ros_time_init).toSec() << " Stamp ...." << std::endl;          
 
-                  // Publish message
-                  px_comm::OpticalFlow optFlowMsg;                
-                  optFlowMsg.header.stamp = stamp - time_diff;
-                  // optFlowMsg.header.stamp = ros::Time(flow.time_usec / 1000000, (flow.time_usec % 1000000) * 1000);
-                  optFlowMsg.header.frame_id = m_frameId;
-                  optFlowMsg.ground_distance = flow.ground_distance;
-                  optFlowMsg.flow_x = flow.flow_x;
-                  optFlowMsg.flow_y = flow.flow_y;
-                  optFlowMsg.velocity_x = flow.flow_comp_m_x;
-                  optFlowMsg.velocity_y = flow.flow_comp_m_y;
-                  optFlowMsg.quality = flow.quality;
+                  // // Publish message
+                  // px_comm::OpticalFlow optFlowMsg;                
+                  // optFlowMsg.header.stamp = stamp - time_diff;
+                  // optFlowMsg.header.frame_id = m_frameId;
+                  // optFlowMsg.ground_distance = flow.ground_distance;
+                  // optFlowMsg.flow_x = flow.flow_x;
+                  // optFlowMsg.flow_y = flow.flow_y;
+                  // optFlowMsg.velocity_x = flow.flow_comp_m_x;
+                  // optFlowMsg.velocity_y = flow.flow_comp_m_y;
+                  // optFlowMsg.quality = flow.quality;
 
                   m_optFlowPub.publish(optFlowMsg);
                 }

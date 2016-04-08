@@ -17,7 +17,7 @@ public:
     SerialComm(const std::string& frameId);
     ~SerialComm();
 
-    bool open(const std::string& portStr, int baudrate);
+    bool open(const std::string& portStr, int baudrate, bool output_filtered, int filter_window_size);
     void close(void);
 
 private:
@@ -62,6 +62,11 @@ private:
     int sensor_ini_usec;
     bool time_ok;
     int nstep;
+
+    std::vector<std::vector<double> > reading_queue_;
+    bool output_filtered_;
+    int filter_window_size_;
+
 };
 
 }

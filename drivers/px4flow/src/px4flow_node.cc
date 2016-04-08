@@ -44,8 +44,14 @@ main(int argc, char** argv)
     std::string frameId;
     pnh.param("frame_id", frameId, std::string("/px4flow"));
 
+    bool output_filtered;
+    pnh.param("output_filtered", output_filtered, false);
+
+    int filter_window_size;
+    pnh.param("filter_window_size", filter_window_size, 5);
+
     px::SerialComm comm(frameId);
-    if (!comm.open(portStr, baudrate))
+    if (!comm.open(portStr, baudrate, output_filtered, filter_window_size))
     {
         return -1;
     }
