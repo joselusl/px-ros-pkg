@@ -209,8 +209,6 @@ SerialComm::readCallback(const boost::system::error_code& error, size_t bytesTra
                     // Add newest reading
                     reading_queue_.push_back(pub_data);
   
-                    std::cout << "QUEUE: [";
-
                     // Compute mean
                     std::vector<double> readsum(5);
                     for (int ii = 0; ii < reading_queue_.size(); ++ii)
@@ -220,9 +218,6 @@ SerialComm::readCallback(const boost::system::error_code& error, size_t bytesTra
                       readsum.at(2) = readsum.at(2) + reading_queue_.at(ii).at(2);
                       readsum.at(3) = readsum.at(3) + reading_queue_.at(ii).at(3);
                       readsum.at(4) = readsum.at(4) + reading_queue_.at(ii).at(4);
-
-                      std::cout << reading_queue_.at(ii).at(3) << ",";
-
                     }
 
                     pub_data.clear();
@@ -230,10 +225,6 @@ SerialComm::readCallback(const boost::system::error_code& error, size_t bytesTra
                     {
                       pub_data.push_back(readsum.at(ii)/reading_queue_.size());
                     }
-
-                    std::cout << "]  MEAN: " << pub_data.at(3) << std::endl;
-
-
 
                     // Clean oldest reading
                     if (reading_queue_.size() > filter_window_size_-1)
