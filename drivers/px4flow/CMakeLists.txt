@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 2.8.3)
 project(px4flow)
 
 find_package(catkin REQUIRED COMPONENTS roscpp std_msgs sensor_msgs image_transport px_comm)
-find_package(Boost REQUIRED COMPONENTS thread system signals)
+find_package(Boost REQUIRED COMPONENTS thread system)
 
 catkin_package(
   INCLUDE_DIRS include
